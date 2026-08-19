@@ -1,0 +1,16 @@
+{
+  "name": "CampiFa - Campaign Poster Personalization",
+  "short_name": "CampiFa",
+  "description": "Create • Personalize • Share campaign posters by i-Fa Design",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFF4E5",
+  "theme_color": "#7B2525",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

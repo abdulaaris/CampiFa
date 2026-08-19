@@ -1,0 +1,183 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../backend/node_modules/.prisma/client"
+}
+
+model User {
+  id           String           @id @default(uuid())
+  email        String           @unique
+  passwordHash String
+  role         String           @default("CUSTOMER")
+  status       String           @default("ACTIVE")
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  profile      CustomerProfile?
+  campaigns    Campaign[]
+  files        FileAsset[]
+  sessions     Session[]
+
+  @@index([email])
+  @@index([role])
+}
+
+model CustomerProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName       String
+  businessName   String
+  phone          String?
+  logoUrl        String?
+  brandColor     String?  @default("#7B2525")
+  address        String?
+  website        String?
+  whatsappNumber String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Campaign {
+  id               String            @id @default(uuid())
+  customerId       String
+  customer         User              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  title            String
+  slug             String            @unique
+  description      String?
+  category         String            @default("general")
+  status           String            @default("DRAFT")
+  posterFileId     String?
+  posterFile       FileAsset?        @relation("CampaignPoster", fields: [posterFileId], references: [id], onDelete: SetNull)
+  viewsCount       Int               @default(0)
+  generationsCount Int               @default(0)
+  downloadsCount   Int               @default(0)
+  sharesCount      Int               @default(0)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  publishedAt      DateTime?
+  template         CampaignTemplate?
+  fields           CampaignField[]
+  generations      Generation[]
+  analyticsEvents  AnalyticsEvent[]
+
+  @@index([customerId])
+  @@index([slug])
+  @@index([status])
+}
+
+model CampaignTemplate {
+  id               String            @id @default(uuid())
+  campaignId       String            @unique
+  campaign         Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  width            Int               @default(1080)
+  height           Int               @default(1350)
+  backgroundFileId String?
+  backgroundFile   FileAsset?        @relation("TemplateBackground", fields: [backgroundFileId], references: [id], onDelete: SetNull)
+  version          Int               @default(1)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  elements         TemplateElement[]
+
+  @@index([campaignId])
+}
+
+model TemplateElement {
+  id          String           @id @default(uuid())
+  templateId  String
+  template    CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  type        String
+  fieldId     String?
+  x           Float            @default(0)
+  y           Float            @default(0)
+  width       Float            @default(200)
+  height      Float            @default(200)
+  rotation    Float            @default(0)
+  zIndex      Int              @default(1)
+  visible     Boolean          @default(true)
+  locked      Boolean          @default(false)
+  stylesJson  String           @default("{}")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([templateId])
+}
+
+model CampaignField {
+  id          String   @id @default(uuid())
+  campaignId  String
+  campaign    Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  name        String
+  label       String
+  type        String   @default("text")
+  required    Boolean  @default(false)
+  placeholder String?
+  maxLength   Int?     @default(100)
+  optionsJson String?
+  orderIndex  Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([campaignId, name])
+  @@index([campaignId])
+}
+
+model FileAsset {
+  id                 String             @id @default(uuid())
+  customerId         String?
+  customer           User?              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  type               String
+  originalName       String
+  mimeType           String
+  size               Int
+  storageKey         String             @unique
+  url                String
+  createdAt          DateTime           @default(now())
+  campaignsAsPoster  Campaign[]         @relation("CampaignPoster")
+  templatesAsBg      CampaignTemplate[] @relation("TemplateBackground")
+
+  @@index([customerId])
+  @@index([type])
+}
+
+model Generation {
+  id                 String   @id @default(uuid())
+  campaignId         String
+  campaign           Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  anonymousSessionId String?
+  metadataJson       String   @default("{}")
+  outputUrl          String
+  createdAt          DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([createdAt])
+}
+
+model AnalyticsEvent {
+  id         String   @id @default(uuid())
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  type       String
+  ipHash     String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([campaignId])
+  @@index([type])
+  @@index([createdAt])
+}

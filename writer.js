@@ -1,0 +1,1 @@
+const fs = require(" fs\); const path = require(\path\); module.exports = function write(relPath, base64Content) { const target = path.join(__dirname, relPath); fs.mkdirSync(path.dirname(target), { recursive: true }); fs.writeFileSync(target, Buffer.from(base64Content, \base64\)); console.log(\Saved: \ + relPath); };

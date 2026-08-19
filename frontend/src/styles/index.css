@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Anek+Bangla:wght@400;600;700;800&family=Anek+Devanagari:wght@400;600;700;800&family=Anek+Gujarati:wght@400;600;700;800&family=Anek+Gurmukhi:wght@400;600;700;800&family=Anek+Kannada:wght@400;600;700;800&family=Anek+Malayalam:wght@400;600;700;800&family=Anek+Odia:wght@400;600;700;800&family=Anek+Tamil:wght@400;600;700;800&family=Anek+Telugu:wght@400;600;700;800&family=Cinzel:wght@700&family=Inter:wght@400;600;700;800&family=Noto+Naskh+Arabic:wght@400;600;700&family=Poppins:wght@400;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-[#FAFAF8] text-[#242424] antialiased selection:bg-[#7B2525] selection:text-white;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-display;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F4EFEA;
+}
+::-webkit-scrollbar-thumb {
+  background: #C4B5A5;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #7B2525;
+}
+
+/* Pulse badge animation */
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.85; transform: scale(1.03); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 3s infinite ease-in-out;
+}
