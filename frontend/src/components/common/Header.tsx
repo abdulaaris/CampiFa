@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
 import { Sparkles, User as UserIcon, LogOut, Menu, Shield } from 'lucide-react';
 
@@ -8,6 +8,27 @@ export const Header: React.FC<{ onToggleSidebar?: () => void; isPublic?: boolean
   isPublic = false,
 }) => {
   const { user, logout, isAuthenticated, isSuperAdmin } = useAuth();
+  const navigate = useNavigate();
+
+  const tapCountRef = useRef<number>(0);
+  const lastTapTimeRef = useRef<number>(0);
+
+  const handleLogoTap = (e: React.MouseEvent) => {
+    const now = Date.now();
+    if (now - lastTapTimeRef.current > 1200) {
+      tapCountRef.current = 1;
+    } else {
+      tapCountRef.current += 1;
+    }
+    lastTapTimeRef.current = now;
+
+    if (tapCountRef.current >= 5) {
+      e.preventDefault();
+      e.stopPropagation();
+      tapCountRef.current = 0;
+      navigate('/admin/login');
+    }
+  };
 
   return (
     <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-brand-border/60">
@@ -25,8 +46,8 @@ export const Header: React.FC<{ onToggleSidebar?: () => void; isPublic?: boolean
               </button>
             )}
 
-            <Link to="/" className="flex items-center space-x-2.5 group">
-              <div className="w-9 h-9 rounded-xl bg-brand-primary flex items-center justify-center text-brand-light font-bold text-lg shadow-sm group-hover:scale-105 transition-transform">
+            <Link to="/" onClick={handleLogoTap} className="flex items-center space-x-2.5 group select-none">
+              <div className="w-9 h-9 rounded-xl bg-brand-primary flex items-center justify-center text-brand-light font-bold text-lg shadow-sm group-hover:scale-105 transition-transform active:scale-95">
                 C
               </div>
               <div className="flex flex-col">
