@@ -67,7 +67,8 @@ export const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const { width, height } = dimensions;
+    const width = Math.max(720, dimensions.width || 1080);
+    const height = Math.max(900, dimensions.height || 1350);
     canvas.width = width;
     canvas.height = height;
 

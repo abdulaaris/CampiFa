@@ -124,10 +124,58 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ campaignId, onBa
       setFields(payload.fields || camp.fields || []);
 
       const tmpl = payload.template || {};
-      const initialElems = (tmpl.elements || []).map((el: any) => ({
+      let initialElems = (tmpl.elements || []).map((el: any) => ({
         ...el,
         styles: typeof el.stylesJson === 'string' ? JSON.parse(el.stylesJson || '{}') : el.styles || {},
       }));
+
+      // Auto-fallback: if template has no elements, provide ready-to-use Photo Area and Name Text Area!
+      if (initialElems.length === 0) {
+        initialElems = [
+          {
+            id: `el_photo_${Date.now()}`,
+            templateId: `tmpl_${campaignId}`,
+            type: 'PHOTO',
+            fieldId: 'photo',
+            x: 380,
+            y: 650,
+            width: 320,
+            height: 320,
+            rotation: 0,
+            zIndex: 1,
+            visible: true,
+            locked: false,
+            styles: {
+              shape: 'circle',
+              borderWidth: 6,
+              borderColor: '#FFFFFF',
+              shadow: true,
+            },
+          },
+          {
+            id: `el_name_${Date.now() + 1}`,
+            templateId: `tmpl_${campaignId}`,
+            type: 'TEXT',
+            fieldId: 'name',
+            x: 240,
+            y: 1020,
+            width: 600,
+            height: 80,
+            rotation: 0,
+            zIndex: 2,
+            visible: true,
+            locked: false,
+            styles: {
+              fontFamily: 'Anek Kannada',
+              fontSize: 48,
+              fontWeight: '600',
+              color: '#FFFFFF',
+              textAlign: 'center',
+              shadow: true,
+            },
+          },
+        ];
+      }
 
       setElements(initialElems);
       setHistory([initialElems]);
