@@ -54,12 +54,37 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
+import { supabase, isSupabaseConfigured } from '../config/supabase';
+
+// Optional free Supabase Storage uploader
+async function uploadToSupabaseBucket(file: File, folder: string): Promise<string | null> {
+  if (!isSupabaseConfigured() || !supabase) return null;
+  try {
+    const filename = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
+    const { data, error } = await supabase.storage.from('campifa').upload(filename, file, {
+      upsert: true,
+    });
+    if (error) {
+      console.warn('Supabase storage upload note:', error.message);
+      return null;
+    }
+    const { data: publicUrlData } = supabase.storage.from('campifa').getPublicUrl(data.path);
+    return publicUrlData.publicUrl;
+  } catch (err) {
+    console.warn('Supabase storage error:', err);
+    return null;
+  }
+}
+
 export const clientStorageService = {
   // 1. Upload Poster Base
   async uploadPoster(file: File): Promise<{ fileAsset: FileAsset; width: number; height: number; format: string }> {
     const { width, height, dataUrl } = await getImageDimensions(file);
     const assetId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     
+    const remoteUrl = await uploadToSupabaseBucket(file, 'posters');
+    const finalUrl = remoteUrl || dataUrl;
+
     const fileAsset: FileAsset = {
       id: assetId,
       customerId: 'current_user',
@@ -68,7 +93,7 @@ export const clientStorageService = {
       mimeType: file.type || 'image/png',
       size: file.size,
       storageKey: `posters/${assetId}`,
-      url: dataUrl,
+      url: finalUrl,
       createdAt: new Date().toISOString(),
     };
 
@@ -89,6 +114,9 @@ export const clientStorageService = {
     const { dataUrl } = await getImageDimensions(file);
     const assetId = `photo_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 
+    const remoteUrl = await uploadToSupabaseBucket(file, 'photos');
+    const finalUrl = remoteUrl || dataUrl;
+
     const fileAsset: FileAsset = {
       id: assetId,
       customerId: null,
@@ -97,13 +125,13 @@ export const clientStorageService = {
       mimeType: file.type || 'image/jpeg',
       size: file.size,
       storageKey: `photos/${assetId}`,
-      url: dataUrl,
+      url: finalUrl,
       createdAt: new Date().toISOString(),
     };
 
     return {
       fileAsset,
-      url: dataUrl,
+      url: finalUrl,
       storageKey: fileAsset.storageKey,
     };
   },
