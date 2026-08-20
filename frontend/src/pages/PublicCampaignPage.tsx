@@ -220,7 +220,34 @@ export const PublicCampaignPage: React.FC = () => {
 
   const posterUrl = campaign.posterFile?.url || campaign.template?.backgroundFile?.url || '';
   const elements = campaign.template?.elements || [];
-  const fields = campaign.fields || [];
+  const rawFields = campaign.fields || [];
+
+  const hasPhotoField =
+    elements.some((el) => el.type === 'PHOTO') ||
+    rawFields.some((f) => f.type === 'photo');
+
+  const effectiveFields: CampaignField[] = [...rawFields.filter((f) => f.type !== 'photo')];
+  elements
+    .filter((el) => el.type === 'TEXT')
+    .forEach((el, idx) => {
+      const fieldId = el.fieldId || 'name';
+      if (!effectiveFields.some((f) => f.name === fieldId)) {
+        effectiveFields.push({
+          id: `f_${fieldId}_${idx}`,
+          name: fieldId,
+          label:
+            fieldId === 'name'
+              ? 'Full Name'
+              : fieldId === 'designation'
+              ? 'Designation'
+              : fieldId.toUpperCase(),
+          type: 'text',
+          required: true,
+          placeholder: `Enter ${fieldId === 'name' ? 'your full name' : fieldId}`,
+          orderIndex: idx,
+        });
+      }
+    });
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-8">
@@ -255,7 +282,7 @@ export const PublicCampaignPage: React.FC = () => {
 
           <form onSubmit={handleGenerate} className="space-y-5">
             {/* 1. Photo Upload Field */}
-            {fields.some((f) => f.type === 'photo') && (
+            {hasPhotoField && (
               <div className="space-y-2">
                 <label className="text-xs font-bold text-brand-dark flex items-center justify-between">
                   <span>Your Photograph *</span>
@@ -312,25 +339,31 @@ export const PublicCampaignPage: React.FC = () => {
             )}
 
             {/* 2. Dynamic Text Fields */}
-            {fields
-              .filter((f) => f.type !== 'photo')
-              .map((f) => (
-                <div key={f.name} className="space-y-1.5">
-                  <label className="text-xs font-bold text-brand-dark block">
-                    {f.label} {f.required && <span className="text-red-500">*</span>}
-                  </label>
-                  <input
-                    id={`input-field-${f.name}`}
-                    type={f.type === 'number' ? 'number' : f.type === 'email' ? 'email' : f.type === 'phone' ? 'tel' : 'text'}
-                    required={f.required}
-                    maxLength={f.maxLength || 80}
-                    placeholder={f.placeholder || `Enter your ${f.label.toLowerCase()}`}
-                    value={fieldValues[f.name] || ''}
-                    onChange={(e) => handleInputChange(f.name, e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-brand-border/80 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary outline-hidden"
-                  />
-                </div>
-              ))}
+            {effectiveFields.map((f) => (
+              <div key={f.name} className="space-y-1.5">
+                <label className="text-xs font-bold text-brand-dark block">
+                  {f.label} {f.required && <span className="text-red-500">*</span>}
+                </label>
+                <input
+                  id={`input-field-${f.name}`}
+                  type={
+                    f.type === 'number'
+                      ? 'number'
+                      : f.type === 'email'
+                      ? 'email'
+                      : f.type === 'phone'
+                      ? 'tel'
+                      : 'text'
+                  }
+                  required={f.required}
+                  maxLength={f.maxLength || 80}
+                  placeholder={f.placeholder || `Enter your ${f.label.toLowerCase()}`}
+                  value={fieldValues[f.name] || ''}
+                  onChange={(e) => handleInputChange(f.name, e.target.value)}
+                  className="w-full px-4 py-2.5 bg-white border border-brand-border/80 rounded-xl text-xs font-medium focus:ring-2 focus:ring-brand-primary/30 focus:border-brand-primary outline-hidden"
+                />
+              </div>
+            ))}
 
             {/* Generate Poster Button */}
             <button
@@ -358,7 +391,7 @@ export const PublicCampaignPage: React.FC = () => {
             <InteractiveCanvas
               posterUrl={posterUrl}
               elements={elements}
-              fields={fields}
+              fields={effectiveFields}
               selectedElementId={null}
               onSelectElement={() => {}}
               onUpdateElement={() => {}}

@@ -322,17 +322,72 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ campaignId, onBa
     }
   };
 
-  // Publish campaign after validation
+  // Publish campaign after saving and validation
   const handlePublish = async () => {
     try {
       setSaving(true);
-      const validation = await templateService.validateTemplate(campaignId);
-      if (!validation.isValid) {
-        showToast(validation.errors.join('; '), 'error');
-        return;
-      }
 
-      await campaignService.publishCampaign(campaignId);
+      // 1. Auto-derive and save fields for every template element
+      const derivedFields: CampaignField[] = [...fields];
+      if (elements.some((el) => el.type === 'PHOTO') && !derivedFields.some((f) => f.type === 'photo')) {
+        derivedFields.push({
+          id: `field_photo_${Date.now()}`,
+          campaignId,
+          name: 'photo',
+          label: 'Your Photograph',
+          type: 'photo',
+          required: false,
+          orderIndex: 0,
+        });
+      }
+      elements
+        .filter((el) => el.type === 'TEXT')
+        .forEach((el, idx) => {
+          const fieldName = el.fieldId || 'name';
+          if (!derivedFields.some((f) => f.name === fieldName)) {
+            derivedFields.push({
+              id: `field_${fieldName}_${Date.now() + idx}`,
+              campaignId,
+              name: fieldName,
+              label:
+                fieldName === 'name'
+                  ? 'Full Name'
+                  : fieldName === 'designation'
+                  ? 'Designation'
+                  : fieldName.toUpperCase(),
+              type: 'text',
+              required: true,
+              placeholder: `Enter ${fieldName === 'name' ? 'your name' : fieldName}`,
+              orderIndex: idx + 1,
+            });
+          }
+        });
+
+      // 2. Save latest template elements & fields to cloud & local
+      await templateService.updateTemplate(campaignId, {
+        backgroundFileId: posterFile?.id || campaign?.posterFileId,
+        elements: elements.map((el, idx) => ({
+          id: el.id,
+          type: el.type,
+          fieldId: el.fieldId || (el.type === 'PHOTO' ? 'photo' : 'name'),
+          x: el.x,
+          y: el.y,
+          width: el.width,
+          height: el.height,
+          rotation: el.rotation || 0,
+          zIndex: idx + 1,
+          visible: el.visible !== undefined ? el.visible : true,
+          locked: el.locked !== undefined ? el.locked : false,
+          styles: el.styles || {},
+          stylesJson: typeof el.stylesJson === 'string' ? el.stylesJson : JSON.stringify(el.styles || {}),
+        })),
+        fields: derivedFields,
+      });
+
+      // 3. Mark Campaign as Published
+      const updatedCampaign = await campaignService.publishCampaign(campaignId);
+      setCampaign(updatedCampaign);
+      setFields(derivedFields);
       showToast('Campaign published successfully! It is now live.', 'success');
       loadData();
     } catch (err: any) {
