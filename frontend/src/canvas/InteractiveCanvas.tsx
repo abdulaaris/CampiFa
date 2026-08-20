@@ -74,16 +74,44 @@ export const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
     // Clear
     ctx.clearRect(0, 0, width, height);
 
-    // 1. Draw Original Background Poster (Locked at layer 0)
     if (bgImageRef.current) {
       ctx.drawImage(bgImageRef.current, 0, 0, width, height);
     } else {
-      ctx.fillStyle = '#1A1110';
+      // Sleek placeholder artwork canvas
+      ctx.fillStyle = '#1e1a19';
       ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#FFF4E5';
-      ctx.font = '24px Poppins, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Loading base poster artwork...', width / 2, height / 2);
+
+      // Soft ambient background grid
+      ctx.strokeStyle = 'rgba(255, 244, 229, 0.05)';
+      ctx.lineWidth = 1;
+      const gs = 40;
+      for (let x = 0; x < width; x += gs) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y < height; y += gs) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+
+      if (posterUrl) {
+        ctx.fillStyle = '#FFF4E5';
+        ctx.font = '600 24px Poppins, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Loading base poster artwork...', width / 2, height / 2);
+      } else {
+        ctx.fillStyle = '#FFF4E5';
+        ctx.font = 'bold 28px Poppins, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Campaign Poster Canvas', width / 2, height / 2 - 20);
+        ctx.fillStyle = '#BA6A4C';
+        ctx.font = '600 16px Inter, sans-serif';
+        ctx.fillText('Click "Change Poster" in the toolbar to upload artwork', width / 2, height / 2 + 20);
+      }
     }
 
     // 2. Draw Optional Grid

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Campaign, CampaignTemplate, TemplateElement, CampaignField, FileAsset } from '../types';
 import { ToolBar } from './ToolBar';
 import { PropertiesBar } from './PropertiesBar';
@@ -7,6 +7,7 @@ import { FieldManagerModal } from './FieldManagerModal';
 import { TemplatePreviewModal } from './TemplatePreviewModal';
 import { templateService } from '../services/templateService';
 import { campaignService } from '../services/campaignService';
+import { uploadService } from '../services/uploadService';
 import { LoadingSpinner } from '../components/common/LoadingSpinner';
 import {
   AlertCircle,
@@ -21,6 +22,7 @@ import {
   CheckCircle,
   Send,
   ExternalLink,
+  Upload,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
@@ -63,6 +65,28 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ campaignId, onBa
   const [showFieldModal, setShowFieldModal] = useState<boolean>(false);
   const [showPreviewModal, setShowPreviewModal] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const posterFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handlePosterChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      showToast('Uploading new poster artwork...', 'success');
+      const res = await uploadService.uploadPoster(file);
+      setPosterFile(res.fileAsset);
+      await campaignService.updateCampaign(campaignId, { posterFileId: res.fileAsset.id });
+      await templateService.updateTemplate(campaignId, {
+        backgroundFileId: res.fileAsset.id,
+        width: res.width,
+        height: res.height,
+        elements,
+        fields,
+      });
+      showToast('Poster artwork updated successfully!', 'success');
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update poster', 'error');
+    }
+  };
 
   const showToast = (text: string, type: 'success' | 'error' = 'success') => {
     setToastMessage({ text, type });
@@ -380,6 +404,23 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ campaignId, onBa
         </div>
 
         <div className="flex items-center space-x-2 shrink-0">
+          <input
+            ref={posterFileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handlePosterChange}
+            className="hidden"
+          />
+
+          <button
+            onClick={() => posterFileInputRef.current?.click()}
+            className="px-2.5 py-1.5 bg-brand-light text-brand-primary font-bold text-xs rounded-xl border border-brand-secondary/30 flex items-center space-x-1 hover:bg-brand-light/80 transition-all"
+            title="Upload or replace base poster artwork"
+          >
+            <Upload className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Change Poster</span>
+          </button>
+
           {campaign?.status !== 'PUBLISHED' ? (
             <button
               onClick={handlePublish}
