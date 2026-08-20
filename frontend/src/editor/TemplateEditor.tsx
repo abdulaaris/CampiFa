@@ -327,7 +327,11 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ campaignId, onBa
   }
 
   const selectedElement = elements.find((el) => el.id === selectedElementId) || null;
-  const posterUrl = posterFile?.url || '';
+  const posterUrl =
+    posterFile?.url ||
+    campaign?.posterFile?.url ||
+    campaign?.template?.backgroundFile?.url ||
+    '';
 
   return (
     <div className="flex flex-col h-[calc(100dvh-5.5rem)] bg-white rounded-2xl border border-brand-border/60 shadow-card overflow-hidden relative">
