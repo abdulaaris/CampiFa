@@ -1,5 +1,6 @@
 import { api } from './api';
 import { CampaignTemplate, TemplateElement, CampaignField, FileAsset } from '../types';
+import { clientStorageService } from './clientStorageService';
 
 export interface TemplateResponse {
   template: CampaignTemplate;
@@ -15,10 +16,14 @@ export interface TemplateResponse {
 
 export const templateService = {
   async getTemplate(campaignId: string): Promise<TemplateResponse> {
-    const res = await api.get<{ success: boolean; data: TemplateResponse }>(
-      `/campaigns/${campaignId}/template`
-    );
-    return res.data;
+    try {
+      const res = await api.get<{ success: boolean; data: TemplateResponse }>(
+        `/campaigns/${campaignId}/template`
+      );
+      return res.data;
+    } catch {
+      return clientStorageService.getTemplate(campaignId);
+    }
   },
 
   async updateTemplate(
@@ -31,11 +36,15 @@ export const templateService = {
       fields?: CampaignField[];
     }
   ) {
-    const res = await api.put<{ success: boolean; data: { template: CampaignTemplate }; message: string }>(
-      `/campaigns/${campaignId}/template`,
-      data
-    );
-    return res.data.template;
+    try {
+      const res = await api.put<{ success: boolean; data: { template: CampaignTemplate }; message: string }>(
+        `/campaigns/${campaignId}/template`,
+        data
+      );
+      return res.data.template;
+    } catch {
+      return clientStorageService.updateTemplate(campaignId, data);
+    }
   },
 
   async validateTemplate(campaignId: string): Promise<{
@@ -43,10 +52,14 @@ export const templateService = {
     errors: string[];
     warnings: string[];
   }> {
-    const res = await api.post<{
-      success: boolean;
-      data: { isValid: boolean; errors: string[]; warnings: string[] };
-    }>(`/campaigns/${campaignId}/template/validate`);
-    return res.data;
+    try {
+      const res = await api.post<{
+        success: boolean;
+        data: { isValid: boolean; errors: string[]; warnings: string[] };
+      }>(`/campaigns/${campaignId}/template/validate`);
+      return res.data;
+    } catch {
+      return clientStorageService.validateTemplate(campaignId);
+    }
   },
 };

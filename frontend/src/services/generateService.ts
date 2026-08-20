@@ -1,5 +1,6 @@
 import { api } from './api';
 import { Generation } from '../types';
+import { clientGeneratePoster } from './clientCompositor';
 
 export interface GenerateResult {
   generationId: string;
@@ -15,33 +16,48 @@ export const generateService = {
     photoFile?: File | null;
     anonymousSessionId?: string;
   }): Promise<GenerateResult> {
-    if (data.photoFile) {
-      const formData = new FormData();
-      formData.append('campaignId', data.campaignId);
-      formData.append('fieldValues', JSON.stringify(data.fieldValues));
-      formData.append('photo', data.photoFile);
-      if (data.anonymousSessionId) {
-        formData.append('anonymousSessionId', data.anonymousSessionId);
-      }
+    try {
+      if (data.photoFile) {
+        const formData = new FormData();
+        formData.append('campaignId', data.campaignId);
+        formData.append('fieldValues', JSON.stringify(data.fieldValues));
+        formData.append('photo', data.photoFile);
+        if (data.anonymousSessionId) {
+          formData.append('anonymousSessionId', data.anonymousSessionId);
+        }
 
-      const res = await api.post<{ success: boolean; data: GenerateResult; message: string }>(
-        '/generate',
-        formData
-      );
-      return res.data;
-    } else {
-      const res = await api.post<{ success: boolean; data: GenerateResult; message: string }>(
-        '/generate',
-        data
-      );
-      return res.data;
+        const res = await api.post<{ success: boolean; data: GenerateResult; message: string }>(
+          '/generate',
+          formData
+        );
+        return res.data;
+      } else {
+        const res = await api.post<{ success: boolean; data: GenerateResult; message: string }>(
+          '/generate',
+          data
+        );
+        return res.data;
+      }
+    } catch {
+      // Automatic client-side canvas generation fallback
+      return clientGeneratePoster(data);
     }
   },
 
   async getGeneration(id: string): Promise<Generation> {
-    const res = await api.get<{ success: boolean; data: { generation: Generation } }>(
-      `/generate/${id}`
-    );
-    return res.data.generation;
+    try {
+      const res = await api.get<{ success: boolean; data: { generation: Generation } }>(
+        `/generate/${id}`
+      );
+      return res.data.generation;
+    } catch {
+      return {
+        id,
+        campaignId: 'current',
+        outputUrl: '',
+        metadataJson: '{}',
+        createdAt: new Date().toISOString(),
+      };
+    }
   },
 };

@@ -51,10 +51,12 @@ export interface TemplateElementStyles {
   fontWeight?: string | number;
   fontStyle?: string;
   color?: string;
+  fill?: string;
   textAlign?: 'left' | 'center' | 'right';
   letterSpacing?: number;
   lineHeight?: number;
   backgroundColor?: string;
+  [key: string]: any;
 }
 
 export interface TemplateElement {
