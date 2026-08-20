@@ -83,12 +83,24 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({ campaignId, onBa
   const loadData = async () => {
     try {
       setLoading(true);
-      const res = await templateService.getTemplate(campaignId);
-      setCampaign(res.campaign);
-      setPosterFile(res.posterFile || null);
-      setFields(res.fields || []);
+      const res: any = await templateService.getTemplate(campaignId);
+      const payload = res?.data || res || {};
 
-      const initialElems = (res.template.elements || []).map((el: any) => ({
+      const camp =
+        payload.campaign ||
+        (await campaignService.getCampaignById(campaignId).catch(() => null)) || {
+          id: campaignId,
+          title: 'Campaign',
+          slug: `campaign-${campaignId}`,
+          status: 'DRAFT',
+        };
+
+      setCampaign(camp);
+      setPosterFile(payload.posterFile || camp.posterFile || null);
+      setFields(payload.fields || camp.fields || []);
+
+      const tmpl = payload.template || {};
+      const initialElems = (tmpl.elements || []).map((el: any) => ({
         ...el,
         styles: typeof el.stylesJson === 'string' ? JSON.parse(el.stylesJson || '{}') : el.styles || {},
       }));
