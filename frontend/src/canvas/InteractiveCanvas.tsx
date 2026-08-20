@@ -423,31 +423,22 @@ export const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
   useEffect(() => {
     if (userPhotoUrl) {
       const p = new Image();
-      if (!userPhotoUrl.startsWith('data:')) {
-        p.crossOrigin = 'anonymous';
-      }
-      p.src = userPhotoUrl;
       p.onload = () => {
         userPhotoImgRef.current = p;
         renderCanvas();
       };
-      p.onerror = () => {
-        if (p.crossOrigin) {
-          const retry = new Image();
-          retry.src = userPhotoUrl;
-          retry.onload = () => {
-            userPhotoImgRef.current = retry;
-            renderCanvas();
-          };
-        }
-      };
+      p.src = userPhotoUrl;
+      if (p.complete && p.naturalWidth > 0) {
+        userPhotoImgRef.current = p;
+        renderCanvas();
+      }
     } else {
       userPhotoImgRef.current = null;
       renderCanvas();
     }
   }, [userPhotoUrl, renderCanvas]);
 
-  // Load base poster artwork with CORS fallback and instant canvas render
+  // Load base poster artwork with instant canvas render and immediate cached complete check
   useEffect(() => {
     if (!posterUrl) {
       bgImageRef.current = null;
@@ -456,30 +447,27 @@ export const InteractiveCanvas: React.FC<InteractiveCanvasProps> = ({
     }
 
     const img = new Image();
-    if (!posterUrl.startsWith('data:')) {
-      img.crossOrigin = 'anonymous';
-    }
-    img.src = posterUrl;
     img.onload = () => {
+      bgImageRef.current = img;
+      const w = img.naturalWidth || img.width || 1080;
+      const h = img.naturalHeight || img.height || 1350;
+      setDimensions({ width: w, height: h });
+      setImgLoaded(true);
+      renderCanvas();
+    };
+    img.onerror = () => {
+      console.warn('InteractiveCanvas image load notice for posterUrl:', posterUrl);
+    };
+    img.src = posterUrl;
+
+    if (img.complete && img.naturalWidth > 0) {
       bgImageRef.current = img;
       const w = img.naturalWidth || 1080;
       const h = img.naturalHeight || 1350;
       setDimensions({ width: w, height: h });
       setImgLoaded(true);
       renderCanvas();
-    };
-    img.onerror = () => {
-      if (img.crossOrigin) {
-        const retryImg = new Image();
-        retryImg.src = posterUrl;
-        retryImg.onload = () => {
-          bgImageRef.current = retryImg;
-          setDimensions({ width: retryImg.naturalWidth || 1080, height: retryImg.naturalHeight || 1350 });
-          setImgLoaded(true);
-          renderCanvas();
-        };
-      }
-    };
+    }
   }, [posterUrl, renderCanvas]);
 
   // Re-render when elements or dimensions change

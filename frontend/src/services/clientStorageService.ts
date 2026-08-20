@@ -343,30 +343,10 @@ export const clientStorageService = {
       sharesCount: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      fields: [
-        {
-          id: `field_photo_${Date.now()}`,
-          campaignId: id,
-          name: 'photo',
-          label: 'Your Photograph',
-          type: 'photo',
-          required: false,
-          orderIndex: 0,
-        },
-        {
-          id: `field_name_${Date.now()}`,
-          campaignId: id,
-          name: 'name',
-          label: 'Full Name',
-          type: 'text',
-          required: true,
-          placeholder: 'Enter your name',
-          orderIndex: 1,
-        },
-      ],
+      fields: [],
     };
 
-    // Default template elements
+    // Clean template starting with empty elements
     const newTemplate: CampaignTemplate = {
       id: `tmpl_${id}`,
       campaignId: id,
@@ -376,50 +356,7 @@ export const clientStorageService = {
       version: 1,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      elements: [
-        {
-          id: `el_photo_${Date.now()}`,
-          templateId: `tmpl_${id}`,
-          type: 'PHOTO',
-          fieldId: 'photo',
-          x: 380,
-          y: 650,
-          width: 320,
-          height: 320,
-          rotation: 0,
-          zIndex: 1,
-          visible: true,
-          locked: false,
-          styles: {
-            shape: 'circle',
-            borderWidth: 6,
-            borderColor: '#FFFFFF',
-            shadow: true,
-          },
-        },
-        {
-          id: `el_name_${Date.now()}`,
-          templateId: `tmpl_${id}`,
-          type: 'TEXT',
-          fieldId: 'name',
-          x: 240,
-          y: 1020,
-          width: 600,
-          height: 80,
-          rotation: 0,
-          zIndex: 2,
-          visible: true,
-          locked: false,
-          styles: {
-            fontFamily: 'Anek Kannada',
-            fontSize: 48,
-            fontWeight: '600',
-            fill: '#FFFFFF',
-            textAlign: 'center',
-            shadow: true,
-          },
-        },
-      ],
+      elements: [],
     };
 
     newCampaign.template = newTemplate;
