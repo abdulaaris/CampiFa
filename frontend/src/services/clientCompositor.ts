@@ -19,15 +19,32 @@ export async function clientGeneratePoster(data: {
 
   // 2. Load Base Poster Artwork
   const bgImg = new Image();
-  bgImg.crossOrigin = 'anonymous';
-  const bgSrc = posterFile?.url || '';
+  const bgSrc = posterFile?.url || template.backgroundFile?.url || '';
+  if (!bgSrc.startsWith('data:')) {
+    bgImg.crossOrigin = 'anonymous';
+  }
   if (bgSrc) {
-    await new Promise((resolve) => {
-      bgImg.onload = resolve;
-      bgImg.onerror = resolve;
+    await new Promise<void>((resolve) => {
+      bgImg.onload = () => {
+        ctx.drawImage(bgImg, 0, 0, width, height);
+        resolve();
+      };
+      bgImg.onerror = () => {
+        // Fallback without CORS if needed
+        const retry = new Image();
+        retry.onload = () => {
+          ctx.drawImage(retry, 0, 0, width, height);
+          resolve();
+        };
+        retry.onerror = () => {
+          ctx.fillStyle = '#1A1110';
+          ctx.fillRect(0, 0, width, height);
+          resolve();
+        };
+        retry.src = bgSrc;
+      };
       bgImg.src = bgSrc;
     });
-    ctx.drawImage(bgImg, 0, 0, width, height);
   } else {
     ctx.fillStyle = '#1A1110';
     ctx.fillRect(0, 0, width, height);
@@ -42,10 +59,9 @@ export async function clientGeneratePoster(data: {
       reader.readAsDataURL(data.photoFile!);
     });
     userPhotoImg = new Image();
-    userPhotoImg.crossOrigin = 'anonymous';
-    await new Promise((resolve) => {
-      userPhotoImg!.onload = resolve;
-      userPhotoImg!.onerror = resolve;
+    await new Promise<void>((resolve) => {
+      userPhotoImg!.onload = () => resolve();
+      userPhotoImg!.onerror = () => resolve();
       userPhotoImg!.src = photoDataUrl;
     });
   }
@@ -63,7 +79,7 @@ export async function clientGeneratePoster(data: {
     ]).catch(() => {});
   }
 
-  // 5. Draw interactive elements sorted by zIndex
+  // 5. Draw interactive elements with pixel-perfect coordinate parity with InteractiveCanvas
   const sortedElements = [...(template.elements || [])].sort((a, b) => (a.zIndex || 1) - (b.zIndex || 1));
 
   for (const el of sortedElements) {
@@ -71,7 +87,7 @@ export async function clientGeneratePoster(data: {
     const styles: any = typeof el.stylesJson === 'string' ? JSON.parse(el.stylesJson || '{}') : el.styles || {};
 
     ctx.save();
-    ctx.translate(el.x, el.y);
+    ctx.translate(el.x + el.width / 2, el.y + el.height / 2);
     if (el.rotation) {
       ctx.rotate((el.rotation * Math.PI) / 180);
     }
@@ -127,13 +143,13 @@ export async function clientGeneratePoster(data: {
         ctx.strokeStyle = borderColor;
         ctx.beginPath();
         if (shape === 'circle') {
-          const r = Math.min(el.width, el.height) / 2;
+          const r = Math.min(el.width, el.height) / 2 - borderWidth / 2;
           ctx.arc(el.width / 2, el.height / 2, r, 0, Math.PI * 2);
         } else if (shape === 'rounded') {
           const rx = Math.min(el.width, el.height) * 0.15;
-          ctx.roundRect(0, 0, el.width, el.height, rx);
+          ctx.roundRect(borderWidth / 2, borderWidth / 2, el.width - borderWidth, el.height - borderWidth, rx);
         } else {
-          ctx.rect(0, 0, el.width, el.height);
+          ctx.rect(borderWidth / 2, borderWidth / 2, el.width - borderWidth, el.height - borderWidth);
         }
         ctx.stroke();
         ctx.restore();
@@ -142,14 +158,16 @@ export async function clientGeneratePoster(data: {
       const fieldId = el.fieldId || 'name';
       const text = data.fieldValues[fieldId] || data.fieldValues.name || '';
       if (text) {
+        const detected = detectScriptFont(text, styles.fontFamily, styles.fontWeight);
         const fontSize = styles.fontSize || 48;
-        const fontWeight = styles.fontWeight || '600';
-        const rawFamily = styles.fontFamily || 'Anek Kannada';
-        const resolvedFont = detectScriptFont(text, rawFamily);
+        const fontFamily = detected.fontFamily;
+        const fontWeight = detected.fontWeight || '600';
+        const color = styles.color || styles.fill || '#242424';
+        const textAlign = (styles.textAlign as CanvasTextAlign) || 'center';
 
-        ctx.font = `${fontWeight} ${fontSize}px "${resolvedFont}", sans-serif`;
-        ctx.fillStyle = styles.fill || '#FFFFFF';
-        ctx.textAlign = (styles.textAlign as CanvasTextAlign) || 'center';
+        ctx.font = `${fontWeight} ${fontSize}px ${fontFamily}`;
+        ctx.fillStyle = color;
+        ctx.textAlign = textAlign;
         ctx.textBaseline = 'middle';
 
         if (styles.shadow) {
@@ -158,11 +176,19 @@ export async function clientGeneratePoster(data: {
           ctx.shadowOffsetY = 2;
         }
 
-        const textX =
-          styles.textAlign === 'left' ? 0 : styles.textAlign === 'right' ? el.width : el.width / 2;
-        const textY = el.height / 2;
+        let textX = el.width / 2;
+        if (textAlign === 'left') textX = 0;
+        else if (textAlign === 'right') textX = el.width;
 
-        ctx.fillText(text, textX, textY);
+        ctx.fillText(text, textX, el.height / 2, el.width);
+      }
+    } else if (el.type === 'SHAPE') {
+      ctx.fillStyle = styles.backgroundColor || 'rgba(0,0,0,0.5)';
+      if (styles.borderRadius) {
+        ctx.roundRect(0, 0, el.width, el.height, styles.borderRadius);
+        ctx.fill();
+      } else {
+        ctx.fillRect(0, 0, el.width, el.height);
       }
     }
 
