@@ -10,6 +10,7 @@ export interface User {
   role: Role;
   status: UserStatus;
   createdAt: string;
+  updatedAt?: string;
   profile?: CustomerProfile;
 }
 

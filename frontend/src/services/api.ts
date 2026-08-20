@@ -10,6 +10,22 @@ export class ApiError extends Error {
   }
 }
 
+const getApiUrl = (endpoint: string): string => {
+  if (endpoint.startsWith('http://') || endpoint.startsWith('https://')) {
+    return endpoint;
+  }
+  
+  const customBase = import.meta.env.VITE_API_URL;
+  if (customBase && customBase.trim() !== '') {
+    const base = customBase.replace(/\/+$/, '');
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return `${base}/api${cleanEndpoint}`;
+  }
+
+  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+  return `/api${cleanEndpoint}`;
+};
+
 async function request<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('campifa_token');
   const headers = new Headers(options.headers || {});
@@ -22,13 +38,21 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
     headers.set('Content-Type', 'application/json');
   }
 
-  const url = endpoint.startsWith('http') ? endpoint : `/api${endpoint}`;
+  const url = getApiUrl(endpoint);
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (netErr: any) {
+    throw new ApiError(
+      netErr.message || 'Cannot connect to backend server. Check your network or VITE_API_URL configuration.',
+      0
+    );
+  }
 
   let data: any;
   const contentType = response.headers.get('content-type');
@@ -39,6 +63,12 @@ async function request<T = any>(endpoint: string, options: RequestInit = {}): Pr
   }
 
   if (!response.ok) {
+    if (response.status === 405) {
+      throw new ApiError(
+        'Backend server is not running at this domain. Please configure VITE_API_URL or Firebase Authentication.',
+        405
+      );
+    }
     const errorMsg = data?.error || data?.message || `Request failed with status ${response.status}`;
     throw new ApiError(errorMsg, response.status, data?.errors);
   }
