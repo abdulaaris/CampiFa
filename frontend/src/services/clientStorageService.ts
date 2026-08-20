@@ -1,9 +1,12 @@
 import { Campaign, CampaignTemplate, TemplateElement, CampaignField, FileAsset } from '../types';
-import { storage } from '../config/firebase';
+import { supabase, isSupabaseConfigured } from '../config/supabase';
 
 const LOCAL_CAMPAIGNS_KEY = 'campifa_campaigns_db';
 const LOCAL_TEMPLATES_KEY = 'campifa_templates_db';
 const LOCAL_FILES_KEY = 'campifa_files_db';
+
+const SUPABASE_BUCKET = 'campifa';
+const SUPABASE_BASE_URL = 'https://pwsmfofmqgkmfretkfmu.supabase.co';
 
 // Helper to get local data
 function getLocalItem<T>(key: string, defaultVal: T): T {
@@ -20,6 +23,33 @@ function setLocalItem<T>(key: string, val: T): void {
     localStorage.setItem(key, JSON.stringify(val));
   } catch (e) {
     console.warn('LocalStorage save error:', e);
+  }
+}
+
+// -------------------------------------------------------------
+// Cloud Sync with Supabase Storage Bucket
+// -------------------------------------------------------------
+async function syncToSupabaseCloud(path: string, jsonData: any): Promise<void> {
+  if (!isSupabaseConfigured() || !supabase) return;
+  try {
+    const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+    await supabase.storage.from(SUPABASE_BUCKET).upload(`data/${path}`, blob, {
+      upsert: true,
+      contentType: 'application/json',
+    });
+  } catch (err) {
+    console.warn(`Supabase cloud sync error for ${path}:`, err);
+  }
+}
+
+async function fetchFromSupabaseCloud<T>(path: string): Promise<T | null> {
+  try {
+    const cloudUrl = `${SUPABASE_BASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/data/${path}?t=${Date.now()}`;
+    const res = await fetch(cloudUrl);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
   }
 }
 
@@ -54,21 +84,19 @@ function slugify(text: string): string {
     .replace(/^-+|-+$/g, '');
 }
 
-import { supabase, isSupabaseConfigured } from '../config/supabase';
-
 // Optional free Supabase Storage uploader
 async function uploadToSupabaseBucket(file: File, folder: string): Promise<string | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
   try {
     const filename = `${folder}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '')}`;
-    const { data, error } = await supabase.storage.from('campifa').upload(filename, file, {
+    const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).upload(filename, file, {
       upsert: true,
     });
     if (error) {
       console.warn('Supabase storage upload note:', error.message);
       return null;
     }
-    const { data: publicUrlData } = supabase.storage.from('campifa').getPublicUrl(data.path);
+    const { data: publicUrlData } = supabase.storage.from(SUPABASE_BUCKET).getPublicUrl(data.path);
     return publicUrlData.publicUrl;
   } catch (err) {
     console.warn('Supabase storage error:', err);
@@ -81,7 +109,7 @@ export const clientStorageService = {
   async uploadPoster(file: File): Promise<{ fileAsset: FileAsset; width: number; height: number; format: string }> {
     const { width, height, dataUrl } = await getImageDimensions(file);
     const assetId = `file_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-    
+
     const remoteUrl = await uploadToSupabaseBucket(file, 'posters');
     const finalUrl = remoteUrl || dataUrl;
 
@@ -141,6 +169,9 @@ export const clientStorageService = {
     const { dataUrl } = await getImageDimensions(file);
     const assetId = `logo_${Date.now()}`;
 
+    const remoteUrl = await uploadToSupabaseBucket(file, 'logos');
+    const finalUrl = remoteUrl || dataUrl;
+
     const fileAsset: FileAsset = {
       id: assetId,
       customerId: 'current_user',
@@ -149,22 +180,41 @@ export const clientStorageService = {
       mimeType: file.type || 'image/png',
       size: file.size,
       storageKey: `logos/${assetId}`,
-      url: dataUrl,
+      url: finalUrl,
       createdAt: new Date().toISOString(),
     };
 
     return {
       fileAsset,
-      url: dataUrl,
+      url: finalUrl,
     };
   },
 
-  // 4. Campaigns CRUD
+  // 4. Campaigns CRUD (with Supabase Cloud Sync)
+  async fetchCloudCampaigns(): Promise<void> {
+    const cloud = await fetchFromSupabaseCloud<Record<string, Campaign>>('campaigns.json');
+    if (cloud && typeof cloud === 'object') {
+      const local = getLocalItem<Record<string, Campaign>>(LOCAL_CAMPAIGNS_KEY, {});
+      const merged = { ...cloud, ...local };
+      setLocalItem(LOCAL_CAMPAIGNS_KEY, merged);
+    }
+
+    const cloudTemplates = await fetchFromSupabaseCloud<Record<string, CampaignTemplate>>('templates.json');
+    if (cloudTemplates && typeof cloudTemplates === 'object') {
+      const localTemplates = getLocalItem<Record<string, CampaignTemplate>>(LOCAL_TEMPLATES_KEY, {});
+      const mergedT = { ...cloudTemplates, ...localTemplates };
+      setLocalItem(LOCAL_TEMPLATES_KEY, mergedT);
+    }
+  },
+
   getCampaigns(params?: { status?: string; search?: string }): { campaigns: Campaign[]; pagination: any } {
+    // Trigger background cloud sync
+    this.fetchCloudCampaigns().catch(() => {});
+
     const campaignsMap = getLocalItem<Record<string, Campaign>>(LOCAL_CAMPAIGNS_KEY, {});
     let list = Object.values(campaignsMap);
 
-    if (params?.status) {
+    if (params?.status && params.status !== 'ALL') {
       list = list.filter((c) => c.status === params.status);
     }
     if (params?.search) {
@@ -187,7 +237,9 @@ export const clientStorageService = {
 
   getCampaignById(id: string): Campaign {
     const campaignsMap = getLocalItem<Record<string, Campaign>>(LOCAL_CAMPAIGNS_KEY, {});
+    const templatesMap = getLocalItem<Record<string, CampaignTemplate>>(LOCAL_TEMPLATES_KEY, {});
     const campaign = campaignsMap[id] || Object.values(campaignsMap).find((c) => c.id === id || c.slug === id);
+
     if (!campaign) {
       return {
         id,
@@ -205,13 +257,27 @@ export const clientStorageService = {
         fields: [],
       };
     }
+
+    // Attach template if available
+    const template = templatesMap[campaign.id];
+    if (template) {
+      campaign.template = template;
+    }
+
     return campaign;
   },
 
-  getPublicCampaign(slug: string): Campaign {
+  async getPublicCampaign(slug: string): Promise<Campaign> {
+    // 1. First sync with Supabase Cloud
+    await this.fetchCloudCampaigns().catch(() => {});
+
     const campaignsMap = getLocalItem<Record<string, Campaign>>(LOCAL_CAMPAIGNS_KEY, {});
+    const templatesMap = getLocalItem<Record<string, CampaignTemplate>>(LOCAL_TEMPLATES_KEY, {});
+    const files = getLocalItem<Record<string, FileAsset>>(LOCAL_FILES_KEY, {});
+
     const list = Object.values(campaignsMap);
     const found = list.find((c) => c.slug === slug || c.id === slug);
+
     if (!found) {
       return {
         id: `camp_${slug}`,
@@ -229,6 +295,21 @@ export const clientStorageService = {
         fields: [],
       };
     }
+
+    // Attach complete template with elements and backgroundFile
+    const template = templatesMap[found.id];
+    if (template) {
+      const bgAsset = template.backgroundFileId ? files[template.backgroundFileId] : null;
+      found.template = {
+        ...template,
+        backgroundFile: bgAsset || found.posterFile || null,
+        elements: (template.elements || []).map((el: any) => ({
+          ...el,
+          styles: typeof el.stylesJson === 'string' ? JSON.parse(el.stylesJson || '{}') : el.styles || {},
+        })),
+      };
+    }
+
     return found;
   },
 
@@ -267,7 +348,7 @@ export const clientStorageService = {
           id: `field_photo_${Date.now()}`,
           campaignId: id,
           name: 'photo',
-          label: 'Your Photo',
+          label: 'Your Photograph',
           type: 'photo',
           required: false,
           orderIndex: 0,
@@ -341,6 +422,7 @@ export const clientStorageService = {
       ],
     };
 
+    newCampaign.template = newTemplate;
     campaignsMap[id] = newCampaign;
     setLocalItem(LOCAL_CAMPAIGNS_KEY, campaignsMap);
 
@@ -348,21 +430,29 @@ export const clientStorageService = {
     templatesMap[id] = newTemplate;
     setLocalItem(LOCAL_TEMPLATES_KEY, templatesMap);
 
+    // Sync to Supabase Cloud
+    syncToSupabaseCloud('campaigns.json', campaignsMap);
+    syncToSupabaseCloud('templates.json', templatesMap);
+
     return newCampaign;
   },
 
   updateCampaign(id: string, data: Partial<Campaign>): Campaign {
     const campaignsMap = getLocalItem<Record<string, Campaign>>(LOCAL_CAMPAIGNS_KEY, {});
-    const existing = campaignsMap[id];
-    if (!existing) throw new Error('Campaign not found');
+    const existing = campaignsMap[id] || { id, title: 'Campaign', slug: `campaign-${id}`, status: 'DRAFT', createdAt: new Date().toISOString() };
 
     const updated = {
       ...existing,
       ...data,
       updatedAt: new Date().toISOString(),
-    };
+    } as Campaign;
+
     campaignsMap[id] = updated;
     setLocalItem(LOCAL_CAMPAIGNS_KEY, campaignsMap);
+
+    // Sync to Supabase Cloud
+    syncToSupabaseCloud('campaigns.json', campaignsMap);
+
     return updated;
   },
 
@@ -396,6 +486,10 @@ export const clientStorageService = {
     const templatesMap = getLocalItem<Record<string, CampaignTemplate>>(LOCAL_TEMPLATES_KEY, {});
     delete templatesMap[id];
     setLocalItem(LOCAL_TEMPLATES_KEY, templatesMap);
+
+    // Sync to Supabase Cloud
+    syncToSupabaseCloud('campaigns.json', campaignsMap);
+    syncToSupabaseCloud('templates.json', templatesMap);
   },
 
   // 5. Template & Elements
@@ -445,7 +539,13 @@ export const clientStorageService = {
     const posterFile = campaign.posterFileId ? files[campaign.posterFileId] : null;
 
     return {
-      template,
+      template: {
+        ...template,
+        elements: (template.elements || []).map((el: any) => ({
+          ...el,
+          styles: typeof el.stylesJson === 'string' ? JSON.parse(el.stylesJson || '{}') : el.styles || {},
+        })),
+      },
       posterFile: posterFile || campaign.posterFile || null,
       fields: campaign.fields || [],
       campaign: {
@@ -482,7 +582,22 @@ export const clientStorageService = {
       width: data.width || template.width || 1080,
       height: data.height || template.height || 1350,
       backgroundFileId: data.backgroundFileId !== undefined ? data.backgroundFileId : template.backgroundFileId,
-      elements: data.elements,
+      elements: data.elements.map((el: any) => ({
+        id: el.id,
+        templateId: `tmpl_${campaignId}`,
+        type: el.type,
+        fieldId: el.fieldId || null,
+        x: el.x,
+        y: el.y,
+        width: el.width,
+        height: el.height,
+        rotation: el.rotation || 0,
+        zIndex: el.zIndex || 1,
+        visible: el.visible !== undefined ? el.visible : true,
+        locked: el.locked !== undefined ? el.locked : false,
+        styles: el.styles || {},
+        stylesJson: typeof el.stylesJson === 'string' ? el.stylesJson : JSON.stringify(el.styles || {}),
+      })),
       version: (template.version || 1) + 1,
       updatedAt: new Date().toISOString(),
     };
@@ -494,6 +609,15 @@ export const clientStorageService = {
       campaignsMap[campaignId].fields = data.fields;
       setLocalItem(LOCAL_CAMPAIGNS_KEY, campaignsMap);
     }
+
+    if (campaignsMap[campaignId]) {
+      campaignsMap[campaignId].template = updatedTemplate;
+      setLocalItem(LOCAL_CAMPAIGNS_KEY, campaignsMap);
+    }
+
+    // Sync to Supabase Cloud
+    syncToSupabaseCloud('templates.json', templatesMap);
+    syncToSupabaseCloud('campaigns.json', campaignsMap);
 
     return updatedTemplate;
   },
@@ -527,5 +651,8 @@ export const clientStorageService = {
 
     campaignsMap[campaignId] = campaign;
     setLocalItem(LOCAL_CAMPAIGNS_KEY, campaignsMap);
+
+    // Sync to Supabase Cloud
+    syncToSupabaseCloud('campaigns.json', campaignsMap);
   },
 };

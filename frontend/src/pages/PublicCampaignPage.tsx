@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { campaignService } from '../services/campaignService';
+import { templateService } from '../services/templateService';
 import { generateService, GenerateResult } from '../services/generateService';
 import { analyticsService } from '../services/analyticsService';
 import { Campaign, TemplateElement, CampaignField } from '../types';
@@ -46,6 +47,18 @@ export const PublicCampaignPage: React.FC = () => {
       try {
         setLoading(true);
         const c = await campaignService.getPublicCampaign(slug);
+        const templateRes = await templateService.getTemplate(c.id).catch(() => null);
+        if (templateRes?.template) {
+          c.template = {
+            ...templateRes.template,
+            elements: (templateRes.template.elements || []).map((el: any) => ({
+              ...el,
+              styles: typeof el.stylesJson === 'string' ? JSON.parse(el.stylesJson || '{}') : el.styles || {},
+            })),
+          };
+          if (templateRes.posterFile) c.posterFile = templateRes.posterFile;
+          if (templateRes.fields && templateRes.fields.length > 0) c.fields = templateRes.fields;
+        }
         setCampaign(c);
 
         // Pre-populate default field values
